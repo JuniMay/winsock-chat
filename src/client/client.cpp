@@ -19,6 +19,7 @@ void ClientState::log(const std::wstring& msg) {
 }
 
 int ClientState::init(char* ip, size_t port) {
+  // create the socket
   this->s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
   if (this->s == INVALID_SOCKET) {
     this->log(std::format(L"could not create socket: {}", WSAGetLastError()));
@@ -27,12 +28,16 @@ int ClientState::init(char* ip, size_t port) {
 
   this->log(L"socket created.");
 
+  // set server address
   this->server.sin_family = AF_INET;
+  // convert ip to binary
   inet_pton(AF_INET, ip, &this->server.sin_addr.s_addr);
+  // convert port to network byte order
   this->server.sin_port = htons((u_short)port);
 
   this->log(L"connecting to server...");
 
+  // connect to server
   if (connect(this->s, (struct sockaddr*)&this->server, sizeof(this->server)) < 0) {
     this->log(
       std::format(L"connect failed with error code: {}", WSAGetLastError())
@@ -46,14 +51,17 @@ int ClientState::init(char* ip, size_t port) {
 }
 
 void ClientState::show_info() {
+  // get server ip
   char ip[INET_ADDRSTRLEN];
   inet_ntop(AF_INET, &this->server.sin_addr, ip, INET_ADDRSTRLEN);
 
+  // convert ip to wstring
   std::wstring ip_wstr;
   for (auto c : std::string(ip)) {
     ip_wstr.push_back(c);
   }
 
+  // print info
   this->log(std::format(
     L"connected to server at {}:{}", ip_wstr, ntohs(this->server.sin_port)
   ));
@@ -61,12 +69,17 @@ void ClientState::show_info() {
 
 void ClientState::loop() {
   this->log(L"starting recv thread...");
+
+  // start recv thread
   std::thread recv_handler_thread(client_recv_handler, this);
 
+  // the buffer for sending messages
   uint8_t message[PROTOCOL_BUFFER_SIZE] = {0};
 
   while (true) {
     std::wstring prompt;
+
+    // get prompt
     std::getline(std::wcin, prompt);
 
     if (prompt == L"exit") {
@@ -199,7 +212,7 @@ void ClientState::cleanup() {
 void client_recv_handler(ClientState* state) {
   uint8_t buffer[PROTOCOL_BUFFER_SIZE] = {0};
 
-  // set timeout
+  // set timeout, so that the thread can exit normally
   struct timeval timeout;
   timeout.tv_sec = 1;
   timeout.tv_usec = 0;

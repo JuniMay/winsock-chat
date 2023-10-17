@@ -14,7 +14,6 @@
 #pragma comment(lib, "ws2_32.lib")
 
 void ServerState::log(const std::wstring& msg) {
-  // time (C++ style)
   auto const time =
     std::chrono::current_zone()->to_local(std::chrono::system_clock::now());
 

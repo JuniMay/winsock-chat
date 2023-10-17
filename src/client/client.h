@@ -16,6 +16,8 @@ struct ClientState {
 
   std::mutex mutex;
 
+  bool running = true;
+
   void log(const std::wstring& msg);
   int init(char* ip, size_t port);
 

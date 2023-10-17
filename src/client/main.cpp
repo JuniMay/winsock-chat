@@ -46,9 +46,7 @@ int main(int argc, char* argv[]) {
 
   state.loop();
 
-  state.log(L"disconnected from server.");
-
-  state.cleanup();
-
+  state.log(L"bye.");
+  
   return 0;
 }

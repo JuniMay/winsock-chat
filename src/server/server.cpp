@@ -318,6 +318,12 @@ void server_recv_handler(ServerState* state, SOCKET socket) {
               state->mutex.lock();
               state->rooms[leave->dst].erase(leave->src);
               state->mutex.unlock();
+
+              // reply ok
+              state->socket_mutexes[socket]->lock();
+              protocol_wrap_msg_reply(RPL_OK, reply_buffer);
+              send(socket, (char*)reply_buffer, sizeof(msg_reply_t), 0);
+              state->socket_mutexes[socket]->unlock();
             } else {
               state->log(std::format(
                 L"unable to find src: {} in room {}", leave->src, leave->dst
@@ -351,4 +357,6 @@ void server_recv_handler(ServerState* state, SOCKET socket) {
       iter += header->length;
     }
   }
+
+  closesocket(socket);
 }

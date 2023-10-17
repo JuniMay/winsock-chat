@@ -61,7 +61,7 @@ void ClientState::show_info() {
 
 void ClientState::loop() {
   this->log(L"starting recv thread...");
-  std::thread(client_recv_handler, this).detach();
+  std::thread recv_handler_thread(client_recv_handler, this);
 
   uint8_t message[PROTOCOL_BUFFER_SIZE] = {0};
 
@@ -182,6 +182,13 @@ void ClientState::loop() {
       this->log(std::format(L"unknown command: {}", tokens[0]));
     }
   }
+
+  this->mutex.lock();
+  this->running = false;
+  // wait for thread to join
+  recv_handler_thread.join();
+  this->cleanup();
+  this->mutex.unlock();
 }
 
 void ClientState::cleanup() {
@@ -192,9 +199,28 @@ void ClientState::cleanup() {
 void client_recv_handler(ClientState* state) {
   uint8_t buffer[PROTOCOL_BUFFER_SIZE] = {0};
 
+  // set timeout
+  struct timeval timeout;
+  timeout.tv_sec = 1;
+  timeout.tv_usec = 0;
+
+  if (setsockopt(state->s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout)) < 0) {
+    state->log(L"failed to set timeout.");
+    return;
+  }
+
   while (true) {
+    if (!state->running) {
+      break;
+    }
+
     int recv_size = recv(state->s, (char*)buffer, PROTOCOL_BUFFER_SIZE, 0);
     if (recv_size == SOCKET_ERROR) {
+      
+      if (WSAGetLastError() == WSAETIMEDOUT) {
+        continue;
+      }
+
       state->log(
         std::format(L"recv failed with error code: {}", WSAGetLastError())
       );
@@ -269,31 +295,30 @@ void client_recv_handler(ClientState* state) {
 
           switch (reply->code) {
             case RPL_NONE: {
-              state->log(L"REPLY_NONE");
               break;
             }
             case RPL_OK: {
-              state->log(L"REPLY_OK");
+              state->log(L"server accomplished the request successfully.");
               break;
             }
             case RPL_SEND_FAILED: {
-              state->log(L"REPLY_ERR");
+              state->log(L"server failed to send the message.");
               break;
             }
             case RPL_DUPLICATED_ID: {
-              state->log(L"REPLY_DUPLICATED_ID");
+              state->log(L"cannot connect to server with duplicated id.");
               break;
             }
             case RPL_DST_NOT_FOUND: {
-              state->log(L"REPLY_DST_NOT_FOUND");
+              state->log(L"the destination of the message is not found.");
               break;
             }
             case RPL_ROOM_NOT_FOUND: {
-              state->log(L"REPLY_ROOM_NOT_FOUND");
+              state->log(L"the room to join or leave is not found.");
               break;
             }
             case RPL_NOT_IN_ROOM: {
-              state->log(L"REPLY_ROOM_FULL");
+              state->log(L"the client is not in the room.");
               break;
             }
           }

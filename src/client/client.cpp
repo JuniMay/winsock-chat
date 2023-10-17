@@ -247,6 +247,37 @@ void client_recv_handler(ClientState* state) {
           state->log(
             std::format("received MSG_REPLY with code: {}", (int)reply->code)
           );
+
+          switch (reply->code) {
+            case RPL_NONE: {
+              state->log("REPLY_NONE");
+              break;
+            }
+            case RPL_OK: {
+              state->log("REPLY_OK");
+              break;
+            }
+            case RPL_SEND_FAILED: {
+              state->log("REPLY_ERR");
+              break;
+            }
+            case RPL_DUPLICATED_ID: {
+              state->log("REPLY_DUPLICATED_ID");
+              break;
+            }
+            case RPL_DST_NOT_FOUND: {
+              state->log("REPLY_DST_NOT_FOUND");
+              break;
+            }
+            case RPL_ROOM_NOT_FOUND: {
+              state->log("REPLY_ROOM_NOT_FOUND");
+              break;
+            }
+            case RPL_NOT_IN_ROOM: {
+              state->log("REPLY_ROOM_FULL");
+              break;
+            }
+          }
           break;
         }
         default: {

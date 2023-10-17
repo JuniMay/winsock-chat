@@ -63,12 +63,16 @@ typedef enum {
   RPL_NONE,
   /// OK
   RPL_OK,
+  /// Error
+  RPL_SEND_FAILED,
   /// The ID of a `CONNECT` message has been used.
   RPL_DUPLICATED_ID,
   /// The `DST` of a `SEND` message is not found.
   RPL_DST_NOT_FOUND,
-  /// The `DST` of a `JOIN` message is not found.
+  /// The `DST` of a `LEAVE` message is not found.
   RPL_ROOM_NOT_FOUND,
+  /// The `SRC` of a `LEAVE` message is not in the room.
+  RPL_NOT_IN_ROOM,
 } reply_code_t;
 
 /// Message header, 8 bytes

@@ -122,7 +122,6 @@ void server_recv_handler(ServerState* state, SOCKET socket) {
     int recv_size = recv(socket, (char*)buffer, PROTOCOL_BUFFER_SIZE, 0);
     state->log(std::format("received {} bytes.", recv_size));
 
-
     if (recv_size == 0) {
       state->mutex.lock();
       state->log("socket disconnected.");
@@ -154,8 +153,37 @@ void server_recv_handler(ServerState* state, SOCKET socket) {
           msg_conn_t* conn = (msg_conn_t*)iter;
           state->log(std::format("received MSG_CONNECT from: {}", conn->ident));
 
+          if (state->clients.contains(conn->ident)) {
+            state->log(std::format("client already exists: {}", conn->ident));
+
+            // reply client already exists
+            state->socket_mutexes[socket]->lock();
+            protocol_wrap_msg_reply(RPL_DUPLICATED_ID, reply_buffer);
+            send(socket, (char*)reply_buffer, sizeof(msg_reply_t), 0);
+            state->socket_mutexes[socket]->unlock();
+
+          } else {
+            state->mutex.lock();
+            state->clients.emplace(conn->ident, socket);
+            state->mutex.unlock();
+
+            // reply ok
+            state->socket_mutexes[socket]->lock();
+            protocol_wrap_msg_reply(RPL_OK, reply_buffer);
+            send(socket, (char*)reply_buffer, sizeof(msg_reply_t), 0);
+            state->socket_mutexes[socket]->unlock();
+          }
+
+          break;
+        }
+        case MSG_DISCONNECT: {
+          msg_conn_t* disconn = (msg_conn_t*)iter;
+          state->log(
+            std::format("received MSG_DISCONNECT from: {}", disconn->ident)
+          );
+
           state->mutex.lock();
-          state->clients.emplace(conn->ident, socket);
+          state->clients.erase(disconn->ident);
           state->mutex.unlock();
 
           // reply ok
@@ -166,13 +194,6 @@ void server_recv_handler(ServerState* state, SOCKET socket) {
 
           break;
         }
-        case MSG_DISCONNECT: {
-          msg_conn_t* disconn = (msg_conn_t*)iter;
-          state->log(
-            std::format("received MSG_DISCONNECT from: {}", disconn->ident)
-          );
-          break;
-        }
         case MSG_SEND: {
           msg_send_t* msg = (msg_send_t*)iter;
           state->log(std::format(
@@ -180,19 +201,92 @@ void server_recv_handler(ServerState* state, SOCKET socket) {
             (char*)(iter + sizeof(msg_send_t))
           ));
 
-          if (state->clients.find(msg->dst) == state->clients.end()) {
-            state->log(std::format("client {} not found.", msg->dst));
+          if (state->clients.contains(msg->dst)) {
+            state->log(std::format("sending message to {}", msg->dst));
+
+            state->socket_mutexes[state->clients[msg->dst]]->lock();
+            int res =
+              send(state->clients[msg->dst], (char*)iter, header->length, 0);
+            state->socket_mutexes[state->clients[msg->dst]]->unlock();
+
+            if (res < 0) {
+              // reply send failed
+              state->socket_mutexes[socket]->lock();
+              protocol_wrap_msg_reply(RPL_SEND_FAILED, reply_buffer);
+              send(socket, (char*)reply_buffer, sizeof(msg_reply_t), 0);
+              state->socket_mutexes[socket]->unlock();
+            } else {
+              // reply ok
+              state->socket_mutexes[socket]->lock();
+              protocol_wrap_msg_reply(RPL_OK, reply_buffer);
+              send(socket, (char*)reply_buffer, sizeof(msg_reply_t), 0);
+              state->socket_mutexes[socket]->unlock();
+            }
+          } else if (state->rooms.contains(msg->dst)) {
+            state->log(std::format("sending message to room {}", msg->dst));
+
+            int all_res = 0;
+
+            for (auto& client : state->rooms[msg->dst]) {
+              if (state->clients.contains(client)) {
+                state->socket_mutexes[state->clients[client]]->lock();
+                int res =
+                  send(state->clients[client], (char*)iter, header->length, 0);
+                state->socket_mutexes[state->clients[client]]->unlock();
+
+                if (res < 0) {
+                  all_res = -1;
+                  break;
+                } else {
+                  all_res += res;
+                }
+              }
+            }
+
+            if (all_res < 0) {
+              // reply send failed
+              state->socket_mutexes[socket]->lock();
+              protocol_wrap_msg_reply(RPL_SEND_FAILED, reply_buffer);
+              send(socket, (char*)reply_buffer, sizeof(msg_reply_t), 0);
+              state->socket_mutexes[socket]->unlock();
+            } else {
+              // reply ok
+              state->socket_mutexes[socket]->lock();
+              protocol_wrap_msg_reply(RPL_OK, reply_buffer);
+              send(socket, (char*)reply_buffer, sizeof(msg_reply_t), 0);
+              state->socket_mutexes[socket]->unlock();
+            }
+
+          } else {
+            state->log(std::format("unable to find dst: {}", msg->dst));
+
+            // reply dst not found
             state->socket_mutexes[socket]->lock();
-            int len = protocol_wrap_msg_reply(RPL_DST_NOT_FOUND, reply_buffer);
-            send(socket, (char*)reply_buffer, len, 0);
-            break;
+            protocol_wrap_msg_reply(RPL_DST_NOT_FOUND, reply_buffer);
+            send(socket, (char*)reply_buffer, sizeof(msg_reply_t), 0);
+            state->socket_mutexes[socket]->unlock();
           }
+          break;
+        }
+        case MSG_JOIN: {
+          msg_room_t* join = (msg_room_t*)iter;
+          state->log(
+            std::format("received MSG_JOIN from {} to {}", join->src, join->dst)
+          );
 
-          SOCKET dst_socket = state->clients[msg->dst];
-
-          state->socket_mutexes[dst_socket]->lock();
-          send(dst_socket, (char*)iter, header->length, 0);
-          state->socket_mutexes[dst_socket]->unlock();
+          if (state->rooms.contains(join->dst)) {
+            state->log(std::format("joining room {}", join->dst));
+            state->mutex.lock();
+            state->rooms[join->dst].insert(join->src);
+            state->mutex.unlock();
+          } else {
+            state->log(std::format("creating room {}", join->dst));
+            state->mutex.lock();
+            state->rooms.emplace(
+              join->dst, std::unordered_set<ident_t>{join->src}
+            );
+            state->mutex.unlock();
+          }
 
           // reply ok
           state->socket_mutexes[socket]->lock();
@@ -202,18 +296,38 @@ void server_recv_handler(ServerState* state, SOCKET socket) {
 
           break;
         }
-        case MSG_JOIN: {
-          msg_room_t* join = (msg_room_t*)iter;
-          state->log(
-            std::format("received MSG_JOIN from {} to {}", join->src, join->dst)
-          );
-          break;
-        }
         case MSG_LEAVE: {
           msg_room_t* leave = (msg_room_t*)iter;
           state->log(std::format(
             "received MSG_LEAVE from {} to {}", leave->src, leave->dst
           ));
+
+          if (state->rooms.contains(leave->dst)) {
+            if (state->rooms[leave->dst].contains(leave->src)) {
+              state->log(std::format("leaving room {}", leave->dst));
+              state->mutex.lock();
+              state->rooms[leave->dst].erase(leave->src);
+              state->mutex.unlock();
+            } else {
+              state->log(std::format(
+                "unable to find src: {} in room {}", leave->src, leave->dst
+              ));
+
+              // reply not in room
+              state->socket_mutexes[socket]->lock();
+              protocol_wrap_msg_reply(RPL_NOT_IN_ROOM, reply_buffer);
+              send(socket, (char*)reply_buffer, sizeof(msg_reply_t), 0);
+              state->socket_mutexes[socket]->unlock();
+            }
+          } else {
+            state->log(std::format("unable to find room: {}", leave->dst));
+
+            // reply room not found
+            state->socket_mutexes[socket]->lock();
+            protocol_wrap_msg_reply(RPL_ROOM_NOT_FOUND, reply_buffer);
+            send(socket, (char*)reply_buffer, sizeof(msg_reply_t), 0);
+            state->socket_mutexes[socket]->unlock();
+          }
 
           break;
         }
@@ -224,13 +338,6 @@ void server_recv_handler(ServerState* state, SOCKET socket) {
           break;
         }
       }
-
-      // reply ok
-      state->socket_mutexes[socket]->lock();
-      protocol_wrap_msg_reply(RPL_OK, reply_buffer);
-      send(socket, (char*)reply_buffer, sizeof(msg_reply_t), 0);
-      state->socket_mutexes[socket]->unlock();
-
       iter += header->length;
     }
   }

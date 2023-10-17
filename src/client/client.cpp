@@ -205,8 +205,10 @@ void ClientState::loop() {
 }
 
 void ClientState::cleanup() {
+  this->log(L"cleaning up...");
   closesocket(this->s);
   WSACleanup();
+  this->log(L"cleaned up.");
 }
 
 void client_recv_handler(ClientState* state) {
@@ -218,7 +220,9 @@ void client_recv_handler(ClientState* state) {
   timeout.tv_usec = 0;
 
   if (setsockopt(state->s, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout)) < 0) {
-    state->log(L"failed to set timeout.");
+    state->log(
+      std::format(L"setsockopt failed with error code: {}", WSAGetLastError())
+    );
     return;
   }
 
@@ -229,7 +233,6 @@ void client_recv_handler(ClientState* state) {
 
     int recv_size = recv(state->s, (char*)buffer, PROTOCOL_BUFFER_SIZE, 0);
     if (recv_size == SOCKET_ERROR) {
-      
       if (WSAGetLastError() == WSAETIMEDOUT) {
         continue;
       }

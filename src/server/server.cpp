@@ -59,10 +59,14 @@ void ServerState::loop() {
 
   int addrlen = sizeof(struct sockaddr_in);
 
-  while (
-    (client_socket =
-       accept(this->master, (struct sockaddr*)&client_addr, &addrlen))
-  ) {
+  // tracking the threads of recv handler
+  std::vector<std::thread> threads;
+
+  std::thread quit_handler(server_quit_handler, this);
+
+  while ((client_socket =
+            accept(this->master, (struct sockaddr*)&client_addr, &addrlen)) !=
+         INVALID_SOCKET) {
     // modify the clients
     this->mutex.lock();
 
@@ -78,9 +82,15 @@ void ServerState::loop() {
     // unlock the mutex
     this->mutex.unlock();
 
-    // create a thread to handle the client
-    std::thread(server_recv_handler, this, client_socket).detach();
+    // create a thread to handle the client and track it
+    threads.emplace_back(server_recv_handler, this, client_socket);
   }
+
+  for (auto& thread : threads) {
+    thread.join();
+  }
+
+  quit_handler.join();
 }
 
 void ServerState::show_info() {
@@ -109,8 +119,10 @@ void ServerState::show_info() {
 }
 
 void ServerState::cleanup() {
+  this->log(L"cleaning up...");
   closesocket(this->master);
   WSACleanup();
+  this->log(L"cleaned up.");
 }
 
 void server_recv_handler(ServerState* state, SOCKET socket) {
@@ -121,9 +133,24 @@ void server_recv_handler(ServerState* state, SOCKET socket) {
   state->socket_mutexes.emplace((size_t)socket, std::make_shared<std::mutex>());
   state->mutex.unlock();
 
+  // set timeout
+  struct timeval timeout;
+  timeout.tv_sec = 1;
+  timeout.tv_usec = 0;
+
+  if (setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout)) < 0) {
+    state->log(
+      std::format(L"setsockopt failed with error code: {}", WSAGetLastError())
+    );
+    return;
+  }
+
   while (true) {
+    if (!state->running) {
+      break;
+    }
+
     int recv_size = recv(socket, (char*)buffer, PROTOCOL_BUFFER_SIZE, 0);
-    state->log(std::format(L"received {} bytes.", recv_size));
 
     if (recv_size == 0) {
       state->mutex.lock();
@@ -134,6 +161,14 @@ void server_recv_handler(ServerState* state, SOCKET socket) {
     }
 
     if (recv_size < 0) {
+      if (WSAGetLastError() == WSAETIMEDOUT) {
+        continue;
+      }
+
+      if (!state->running) {
+        break;
+      }
+
       state->mutex.lock();
       state->log(
         std::format(L"recv failed with error code: {}", WSAGetLastError())
@@ -142,6 +177,8 @@ void server_recv_handler(ServerState* state, SOCKET socket) {
       state->mutex.unlock();
       break;
     }
+
+    state->log(std::format(L"received {} bytes.", recv_size));
 
     // parse the message
     uint8_t* iter = buffer;
@@ -154,7 +191,8 @@ void server_recv_handler(ServerState* state, SOCKET socket) {
         }
         case MSG_CONNECT: {
           msg_conn_t* conn = (msg_conn_t*)iter;
-          state->log(std::format(L"received MSG_CONNECT from: {}", conn->ident));
+          state->log(std::format(L"received MSG_CONNECT from: {}", conn->ident)
+          );
 
           if (state->clients.contains(conn->ident)) {
             state->log(std::format(L"client already exists: {}", conn->ident));
@@ -200,14 +238,14 @@ void server_recv_handler(ServerState* state, SOCKET socket) {
         case MSG_SEND: {
           msg_send_t* msg = (msg_send_t*)iter;
 
-
           int content_len = msg->header.length - sizeof(msg_send_t);
           wchar_t* content = (wchar_t*)(iter + sizeof(msg_send_t));
 
           std::wstring wstr(content, content + content_len / sizeof(wchar_t));
 
           state->log(std::format(
-            L"received MSG_SEND from {} to {} with `{}`", msg->src, msg->dst, wstr
+            L"received MSG_SEND from {} to {} with `{}`", msg->src, msg->dst,
+            wstr
           ));
 
           if (state->clients.contains(msg->dst)) {
@@ -279,9 +317,9 @@ void server_recv_handler(ServerState* state, SOCKET socket) {
         }
         case MSG_JOIN: {
           msg_room_t* join = (msg_room_t*)iter;
-          state->log(
-            std::format(L"received MSG_JOIN from {} to {}", join->src, join->dst)
-          );
+          state->log(std::format(
+            L"received MSG_JOIN from {} to {}", join->src, join->dst
+          ));
 
           if (state->rooms.contains(join->dst)) {
             state->log(std::format(L"joining room {}", join->dst));
@@ -358,4 +396,18 @@ void server_recv_handler(ServerState* state, SOCKET socket) {
   }
 
   closesocket(socket);
+}
+
+void server_quit_handler(ServerState* state) {
+  // wait and read `q` from screen
+  char c;
+  while ((c = getchar()) != 'q') {
+    continue;
+  }
+
+  state->log(L"quitting server...");
+  state->mutex.lock();
+  state->running = false;
+  state->cleanup();
+  state->mutex.unlock();
 }

@@ -23,6 +23,8 @@ struct ServerState {
   /// The server address
   struct sockaddr_in server;
 
+  bool running = true;
+
   /// The clients
   std::unordered_map<ident_t, SOCKET> clients;
   /// Mutex for sockets
@@ -47,5 +49,8 @@ struct ServerState {
 
 /// The handler for receiving messages from the client.
 void server_recv_handler(ServerState* state, SOCKET socket);
+
+/// The handler for quitting the server.
+void server_quit_handler(ServerState* state);
 
 #endif

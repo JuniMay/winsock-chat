@@ -3,35 +3,38 @@
 
 #include "WinSock2.h"
 
-typedef struct {
-  /// Port to listen to.
+#include <mutex>
+#include <queue>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+
+#include "protocol/protocol.h"
+
+struct ServerState {
   size_t port;
-  /// Maximum number of clients.
   size_t max_clients;
-  /// Master socket.
   SOCKET master;
-  /// Server address.
   struct sockaddr_in server;
+
+  std::unordered_map<ident_t, SOCKET> clients;
+  /// Mutex for sockets
+  std::unordered_map<SOCKET, std::shared_ptr<std::mutex>> socket_mutexes;
+  std::unordered_map<ident_t, std::unordered_set<ident_t>> rooms;
+
   /// Mutex
-  HANDLE mutex;
-} server_state_t;
+  std::mutex mutex;
 
-typedef struct {
-  server_state_t* state;
-  SOCKET client_socket;
-} server_recv_handler_arg_t;
+  void log(const std::string& msg);
+  int init(size_t port, size_t max_clients);
+  void loop();
 
-void server_log(const char* msg, ...);
+  void show_info();
 
-int server_init(server_state_t* state, size_t port, size_t max_clients);
-void server_loop(server_state_t* state);
-void server_show_info(server_state_t* state);
+  void cleanup();
+};
 
-void server_cleanup(server_state_t* state);
-
-/// A thread to handle a client.
-///
-/// Require a mutex to protect the state.
-void server_recv_handler(void* arg);
+void server_recv_handler(ServerState* state, SOCKET socket);
 
 #endif

@@ -1,21 +1,32 @@
 #ifndef CLIENT_CLIENT_H_
 #define CLIENT_CLIENT_H_
 
-typedef struct {
+#include "WinSock2.h"
+
+#include <string>
+#include <mutex>
+
+#include "protocol/protocol.h"
+
+struct ClientState {
+  SOCKET s;
   struct sockaddr_in server;
-  SOCKET socket;
-} client_state_t;
 
-void client_log(const char* msg, ...);
+  ident_t ident;
 
-int client_init(client_state_t* state, const char* ip, size_t port);
-void client_show_info(client_state_t* state);
+  std::mutex mutex;
 
-void client_cleanup(client_state_t* state);
+  void log(const std::string& msg);
+  int init(char* ip, size_t port);
 
-void client_loop(client_state_t* state);
+  void loop();
 
-void client_send_handler(void* arg);
-void client_recv_handler(void* arg);
+  void show_info();
+  void cleanup();
+};
+
+void client_recv_handler(ClientState* state);
+
+
 
 #endif // CLIENT_CLIENT_H_

@@ -28,7 +28,7 @@ length_t protocol_wrap_msg_send(
   uint8_t buffer[]
 ) {
   msg_send_t msg = {
-    .header = {.type = MSG_SEND, .length = 20 + data_len},
+    .header = {.type = MSG_SEND, .length = (size_t)(20 + data_len)},
     .src = src,
     .dst = dst,
     .format = format};

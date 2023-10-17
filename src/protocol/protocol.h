@@ -1,6 +1,10 @@
 #ifndef PROTOCOL_PROTOCOL_H_
 #define PROTOCOL_PROTOCOL_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdint.h>
 
 #define PROTOCOL_BUFFER_SIZE 65535
@@ -133,5 +137,9 @@ length_t protocol_wrap_msg_send(
 length_t protocol_wrap_msg_join(ident_t src, ident_t dst, uint8_t buffer[]);
 length_t protocol_wrap_msg_leave(ident_t src, ident_t dst, uint8_t buffer[]);
 length_t protocol_wrap_msg_reply(reply_code_t code, uint8_t buffer[]);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

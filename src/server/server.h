@@ -26,7 +26,7 @@ struct ServerState {
   /// Mutex
   std::mutex mutex;
 
-  void log(const std::string& msg);
+  void log(const std::wstring& msg);
   int init(size_t port, size_t max_clients);
   void loop();
 

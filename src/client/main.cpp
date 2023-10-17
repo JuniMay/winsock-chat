@@ -7,6 +7,7 @@
 #include "protocol/protocol.h"
 
 #include <format>
+#include <iostream>
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -21,18 +22,23 @@ int main(int argc, char* argv[]) {
 
   ClientState state;
 
+  // set locale chinese
+  std::locale::global(std::locale("zh_CN.UTF-8"));
+  std::wcin.imbue(std::locale());
+  std::wcout.imbue(std::locale());
+
   state.ident = atoi(argv[3]);
 
-  state.log("initializing winsock...");
+  state.log(L"initializing winsock...");
   if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
-    state.log(std::format("failed. error code: {}", WSAGetLastError()));
+    state.log(std::format(L"failed. error code: {}", WSAGetLastError()));
     return 1;
   }
 
-  state.log("initialized.");
+  state.log(L"initialized.");
 
   if (state.init(argv[1], port) != 0) {
-    state.log("failed to initialize client.\n");
+    state.log(L"failed to initialize client.\n");
     state.cleanup();
     return 1;
   }
@@ -40,7 +46,7 @@ int main(int argc, char* argv[]) {
 
   state.loop();
 
-  state.log("disconnected from server.");
+  state.log(L"disconnected from server.");
 
   state.cleanup();
 

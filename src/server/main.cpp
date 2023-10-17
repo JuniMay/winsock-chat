@@ -16,6 +16,10 @@ int main(int argc, char* argv[]) {
   size_t max_clients = 10;
   size_t port = 8888;
 
+  std::locale::global(std::locale("zh_CN.UTF-8"));
+  std::wcin.imbue(std::locale());
+  std::wcout.imbue(std::locale());
+
   if (argc > 1) {
     max_clients = atoi(argv[1]);
   }
@@ -28,16 +32,16 @@ int main(int argc, char* argv[]) {
 
   ServerState state;
 
-  state.log("initializing winsock...");
+  state.log(L"initializing winsock...");
   if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
-    state.log(std::format("failed. error code: {}", WSAGetLastError()));
+    state.log(std::format(L"failed. error code: {}", WSAGetLastError()));
     return 1;
   }
 
-  state.log("initialized.");
+  state.log(L"initialized.");
 
   if (state.init(port, max_clients) != 0) {
-    state.log("failed to initialize server.");
+    state.log(L"failed to initialize server.");
     state.cleanup();
     return 1;
   }

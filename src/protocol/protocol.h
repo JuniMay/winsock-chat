@@ -126,9 +126,11 @@ typedef struct {
 typedef int length_t;
 typedef uint32_t format_t;
 
+/// Wrap a connect message into a buffer.
 length_t protocol_wrap_msg_connect(ident_t ident, uint8_t buffer[]);
+/// Wrap a disconnect message into a buffer.
 length_t protocol_wrap_msg_disconnect(ident_t ident, uint8_t buffer[]);
-
+/// Wrap a send message into a buffer.
 length_t protocol_wrap_msg_send(
   ident_t src,
   ident_t dst,
@@ -137,9 +139,11 @@ length_t protocol_wrap_msg_send(
   uint8_t data[],
   uint8_t buffer[]
 );
-
+/// Wrap a join message into a buffer.
 length_t protocol_wrap_msg_join(ident_t src, ident_t dst, uint8_t buffer[]);
+/// Wrap a leave message into a buffer.
 length_t protocol_wrap_msg_leave(ident_t src, ident_t dst, uint8_t buffer[]);
+/// Wrap a reply message into a buffer.
 length_t protocol_wrap_msg_reply(reply_code_t code, uint8_t buffer[]);
 
 #ifdef __cplusplus

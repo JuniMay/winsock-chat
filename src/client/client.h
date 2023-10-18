@@ -20,6 +20,13 @@ struct ClientState {
   std::mutex mutex;
   /// Whether the client is running
   bool running = true;
+  /// Whether the client log function is enabled
+  bool log_enabled = true;
+
+  /// Mark the message is sent but not replied by the server
+  bool replied = false;
+  /// The condition variable for replied to synchronize the client threads
+  std::condition_variable replied_cv;
   
   /// Print a message to stdout with a prefix
   void log(const std::wstring& msg);

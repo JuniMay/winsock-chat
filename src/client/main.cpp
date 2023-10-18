@@ -13,7 +13,7 @@
 
 int main(int argc, char* argv[]) {
   if (argc < 4) {
-    printf("Usage: %s <ip> <server port> <ident>\n", argv[0]);
+    printf("Usage: %s <ip> <server port> <ident> <logging>\n", argv[0]);
     return 1;
   }
   size_t port = atoi(argv[2]);
@@ -21,6 +21,10 @@ int main(int argc, char* argv[]) {
   WSADATA wsa;
 
   ClientState state;
+
+  if (argc >= 5) {
+    state.log_enabled = atoi(argv[4]);
+  }
 
   // set locale chinese
   std::locale::global(std::locale("zh_CN.UTF-8"));

@@ -12,10 +12,15 @@
 #pragma comment(lib, "ws2_32.lib")
 
 void ClientState::log(const std::wstring& msg) {
+  if (!this->log_enabled) {
+    return;
+  }
+
   auto const time =
     std::chrono::current_zone()->to_local(std::chrono::system_clock::now());
 
-  std::wcout << std::format(L"[ {} CLIENT ] {}", time, msg) << std::endl;
+  std::wcout << std::format(L"\033[90m[ {} CLIENT ]\033[0m {}", time, msg)
+             << std::endl;
 }
 
 int ClientState::init(char* ip, size_t port) {
@@ -77,6 +82,9 @@ void ClientState::loop() {
   uint8_t message[PROTOCOL_BUFFER_SIZE] = {0};
 
   while (true) {
+    // print prefix, ident green
+    std::wcout << std::format(L"\033[32m{:17}\033[0m> ", this->ident);
+
     std::wstring prompt;
 
     // get prompt
@@ -113,6 +121,8 @@ void ClientState::loop() {
     if (tokens.size() == 0) {
       continue;
     }
+
+    bool set_reply_flag = true;
 
     if (tokens[0] == L"send") {
       if (tokens.size() < 3) {
@@ -186,13 +196,26 @@ void ClientState::loop() {
 
       if (send(this->s, (char*)message, (int)len, 0) < 0) {
         this->log(L"send to server failed.");
-
         return;
       }
 
       this->log(L"sent disconnect message to server.");
     } else {
       this->log(std::format(L"unknown command: {}", tokens[0]));
+      std::wcout << std::format(
+                      L"\033[90m({:^15})\033[0m> \033[31munknown command: {}",
+                      L"client", tokens[0]
+                    )
+                 << std::endl;
+
+      set_reply_flag = false;
+    }
+
+    if (set_reply_flag) {
+      // use condition variable to wait for reply
+      std::unique_lock<std::mutex> lock(this->mutex);
+      this->replied = false;
+      this->replied_cv.wait(lock, [this] { return this->replied; });
     }
   }
 
@@ -259,19 +282,6 @@ void client_recv_handler(ClientState* state) {
           state->log(L"received MSG_NONE.");
           break;
         }
-        case MSG_CONNECT: {
-          msg_conn_t* conn = (msg_conn_t*)iter;
-          state->log(std::format(L"received MSG_CONNECT from: {}", conn->ident)
-          );
-          break;
-        }
-        case MSG_DISCONNECT: {
-          msg_conn_t* disconn = (msg_conn_t*)iter;
-          state->log(
-            std::format(L"received MSG_DISCONNECT from: {}", disconn->ident)
-          );
-          break;
-        }
         case MSG_SEND: {
           msg_send_t* send = (msg_send_t*)iter;
 
@@ -287,20 +297,24 @@ void client_recv_handler(ClientState* state) {
             L"received MSG_SEND from {} to {} with `{}`", send->src, send->dst,
             wstr
           ));
-          break;
-        }
-        case MSG_JOIN: {
-          msg_room_t* join = (msg_room_t*)iter;
-          state->log(std::format(
-            L"received MSG_JOIN from {} to {}", join->src, join->dst
-          ));
-          break;
-        }
-        case MSG_LEAVE: {
-          msg_room_t* leave = (msg_room_t*)iter;
-          state->log(std::format(
-            L"received MSG_LEAVE from {} to {}", leave->src, leave->dst
-          ));
+
+          // center, 15 alinged
+          std::wstring detail = std::format(L"{:^10}", L"client");
+
+          if (send->dst != state->ident) {
+            detail = std::format(L"{:^10}", std::format(L"room {}", send->dst));
+
+            if (send->src == state->ident) {
+              break;
+            }
+          }
+
+          std::wcout << std::endl
+                     << std::format(
+                          L"\033[36m{:5}({})\033[0m> {}", send->src, detail,
+                          wstr
+                        );
+
           break;
         }
         case MSG_REPLY: {
@@ -319,25 +333,66 @@ void client_recv_handler(ClientState* state) {
             }
             case RPL_SEND_FAILED: {
               state->log(L"server failed to send the message.");
+              std::wcout
+                << std::format(
+                     L"\033[90m({:^15})\033[0m> \033[31mfailed to send the "
+                     L"message.\033[0m",
+                     L"server"
+                   )
+                << std::endl;
               break;
             }
             case RPL_DUPLICATED_ID: {
               state->log(L"cannot connect to server with duplicated id.");
+              std::wcout
+                << std::format(
+                     L"\033[90m({:^15})\033[0m> \033[31mplease choose another "
+                     L"id.\033[0m",
+                     L"server"
+                   )
+                << std::endl;
               break;
             }
             case RPL_DST_NOT_FOUND: {
               state->log(L"the destination of the message is not found.");
+
+              std::wcout << std::format(
+                              L"\033[90m({:^15})\033[0m> \033[31mdestination "
+                              L"of the message is "
+                              L"not found.\033[0m",
+                              L"server"
+                            )
+                         << std::endl;
               break;
             }
             case RPL_ROOM_NOT_FOUND: {
               state->log(L"the room to join or leave is not found.");
+              std::wcout << std::format(
+                              L"\033[90m({:^15})\033[0m> \033[31mroom is not "
+                              L"found.\033[0m",
+                              L"server"
+                            )
+                         << std::endl;
               break;
             }
             case RPL_NOT_IN_ROOM: {
               state->log(L"the client is not in the room.");
+              std::wcout << std::format(
+                              L"\033[90m({:^15})\033[0m> \033[31mhave not "
+                              L"joined the room "
+                              L"yet.\033[0m",
+                              L"server"
+                            )
+                         << std::endl;
               break;
             }
           }
+
+          // set replied flag and notify
+          std::unique_lock<std::mutex> lock(state->mutex);
+          state->replied = true;
+          state->replied_cv.notify_all();
+
           break;
         }
         default: {

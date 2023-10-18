@@ -17,7 +17,9 @@ void ServerState::log(const std::wstring& msg) {
   auto const time =
     std::chrono::current_zone()->to_local(std::chrono::system_clock::now());
 
-  std::wcout << std::format(L"[ {} SERVER ] {}", time, msg) << std::endl;
+  // grey for time and default for msg
+  std::wcout << std::format(L"\033[90m[ {} SERVER ]\033[0m {}", time, msg)
+             << std::endl;
 }
 
 int ServerState::init(size_t port, size_t max_clients) {
@@ -112,10 +114,20 @@ void ServerState::show_info() {
 
   std::wstring ip_wstr(ip, ip + strlen(ip));
 
-  this->log(std::format(L"server ip:          {}", ip_wstr));
-  this->log(std::format(L"server port:        {}", ntohs(this->server.sin_port))
+  // this->log(std::format(L"server ip:          {}", ip_wstr));
+  // this->log(std::format(L"server port:        {}",
+  // ntohs(this->server.sin_port))
+  // );
+  // this->log(std::format(L"server max clients: {}", this->max_clients));
+
+  // green for ip, port and max clients value and default for promt text
+  this->log(std::format(
+    L"server ip & port:   \033[92m{}:{}\033[0m", ip_wstr,
+    ntohs(this->server.sin_port)
+  ));
+  this->log(
+    std::format(L"server max clients: \033[92m{}\033[0m", this->max_clients)
   );
-  this->log(std::format(L"server max clients: {}", this->max_clients));
 }
 
 void ServerState::cleanup() {

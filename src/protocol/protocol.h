@@ -73,6 +73,8 @@ typedef enum {
   RPL_ROOM_NOT_FOUND,
   /// The `SRC` of a `LEAVE` message is not in the room.
   RPL_NOT_IN_ROOM,
+  /// The room id for `JOIN` has conflict with an existing client.
+  RPL_ROOM_CONFLICT,
 } reply_code_t;
 
 /// Message header, 8 bytes

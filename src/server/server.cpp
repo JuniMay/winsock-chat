@@ -333,6 +333,17 @@ void server_recv_handler(ServerState* state, SOCKET socket) {
             L"received MSG_JOIN from {} to {}", join->src, join->dst
           ));
 
+          if (state->clients.contains(join->dst)) {
+            state->log(std::format(L"conflict of room and client id: {}", join->dst));
+
+            // reply client already exists
+            state->socket_mutexes[socket]->lock();
+            protocol_wrap_msg_reply(RPL_ROOM_CONFLICT, reply_buffer);
+            send(socket, (char*)reply_buffer, sizeof(msg_reply_t), 0);
+            state->socket_mutexes[socket]->unlock();
+            break;
+          }
+
           if (state->rooms.contains(join->dst)) {
             state->log(std::format(L"joining room {}", join->dst));
             state->mutex.lock();

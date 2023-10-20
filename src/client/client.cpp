@@ -83,7 +83,7 @@ void ClientState::loop() {
 
   while (true) {
     // print prefix, ident green
-    std::wcout << std::format(L"\033[32m{:17}\033[0m> ", this->ident);
+    std::wcout << std::format(L"\033[32m{:^17}\033[0m> ", this->ident);
 
     std::wstring prompt;
 
@@ -203,7 +203,7 @@ void ClientState::loop() {
     } else {
       this->log(std::format(L"unknown command: {}", tokens[0]));
       std::wcout << std::format(
-                      L"\033[90m({:^15})\033[0m> \033[31munknown command: {}",
+                      L"\033[90m{:^17}\033[0m> \033[31munknown command: {}",
                       L"client", tokens[0]
                     )
                  << std::endl;
@@ -299,21 +299,19 @@ void client_recv_handler(ClientState* state) {
           ));
 
           // center, 15 alinged
-          std::wstring detail = std::format(L"{:^10}", L"client");
+          std::wstring detail = L"";
 
           if (send->dst != state->ident) {
-            detail = std::format(L"{:^10}", std::format(L"room {}", send->dst));
-
             if (send->src == state->ident) {
               break;
             }
+            detail = std::format(L"@ room {}", send->dst);
           }
 
+          detail = std::format(L"{:^5}{}", send->src, detail);
+
           std::wcout << std::endl
-                     << std::format(
-                          L"\033[36m{:5}({})\033[0m> {}", send->src, detail,
-                          wstr
-                        );
+                     << std::format(L"\033[36m{:^17}\033[0m> {}", detail, wstr);
 
           break;
         }
@@ -335,7 +333,7 @@ void client_recv_handler(ClientState* state) {
               state->log(L"server failed to send the message.");
               std::wcout
                 << std::format(
-                     L"\033[90m({:^15})\033[0m> \033[31mfailed to send the "
+                     L"\033[90m{:^17}\033[0m> \033[31mfailed to send the "
                      L"message.\033[0m",
                      L"server"
                    )
@@ -346,7 +344,7 @@ void client_recv_handler(ClientState* state) {
               state->log(L"cannot connect to server with duplicated id.");
               std::wcout
                 << std::format(
-                     L"\033[90m({:^15})\033[0m> \033[31mplease choose another "
+                     L"\033[90m{:^17}\033[0m> \033[31mplease choose another "
                      L"id.\033[0m",
                      L"server"
                    )
@@ -357,7 +355,7 @@ void client_recv_handler(ClientState* state) {
               state->log(L"the destination of the message is not found.");
 
               std::wcout << std::format(
-                              L"\033[90m({:^15})\033[0m> \033[31mdestination "
+                              L"\033[90m{:^17}\033[0m> \033[31mdestination "
                               L"of the message is "
                               L"not found.\033[0m",
                               L"server"
@@ -368,7 +366,7 @@ void client_recv_handler(ClientState* state) {
             case RPL_ROOM_NOT_FOUND: {
               state->log(L"the room to join or leave is not found.");
               std::wcout << std::format(
-                              L"\033[90m({:^15})\033[0m> \033[31mroom is not "
+                              L"\033[90m{:^17}\033[0m> \033[31mroom is not "
                               L"found.\033[0m",
                               L"server"
                             )
@@ -378,9 +376,21 @@ void client_recv_handler(ClientState* state) {
             case RPL_NOT_IN_ROOM: {
               state->log(L"the client is not in the room.");
               std::wcout << std::format(
-                              L"\033[90m({:^15})\033[0m> \033[31mhave not "
+                              L"\033[90m{:^17}\033[0m> \033[31mhave not "
                               L"joined the room "
                               L"yet.\033[0m",
+                              L"server"
+                            )
+                         << std::endl;
+              break;
+            }
+            case RPL_ROOM_CONFLICT: {
+              state->log(
+                L"the room id for join has conflict with an existing client."
+              );
+              std::wcout << std::format(
+                              L"\033[90m{:^17}\033[0m> \033[31mroom id "
+                              L"conflict with client.\033[0m",
                               L"server"
                             )
                          << std::endl;

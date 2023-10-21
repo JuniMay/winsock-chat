@@ -75,6 +75,8 @@ typedef enum {
   RPL_NOT_IN_ROOM,
   /// The room id for `JOIN` has conflict with an existing client.
   RPL_ROOM_CONFLICT,
+  /// The server rejected the client.
+  RPL_REJECTED,
 } reply_code_t;
 
 /// Message header, 8 bytes

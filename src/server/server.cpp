@@ -71,16 +71,7 @@ void ServerState::loop() {
          INVALID_SOCKET) {
     // modify the clients
     this->mutex.lock();
-
-    if (this->clients.size() >= this->max_clients) {
-      this->log(L"client rejected.\n");
-      closesocket(client_socket);
-      this->mutex.unlock();
-      continue;
-    }
-
     this->log(L"connection accepted.");
-
     // unlock the mutex
     this->mutex.unlock();
 
@@ -205,6 +196,20 @@ void server_recv_handler(ServerState* state, SOCKET socket) {
           msg_conn_t* conn = (msg_conn_t*)iter;
           state->log(std::format(L"received MSG_CONNECT from: {}", conn->ident)
           );
+
+          if (state->clients.size() >= state->max_clients) {
+            state->log(L"client rejected.");
+
+            // reply rejected
+            state->socket_mutexes[socket]->lock();
+            protocol_wrap_msg_reply(RPL_REJECTED, reply_buffer);
+            send(socket, (char*)reply_buffer, sizeof(msg_reply_t), 0);
+            state->socket_mutexes[socket]->unlock();
+            
+            // close
+            closesocket(socket);
+            return;
+          }
 
           if (state->clients.contains(conn->ident)) {
             state->log(std::format(L"client already exists: {}", conn->ident));

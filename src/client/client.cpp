@@ -396,6 +396,16 @@ void client_recv_handler(ClientState* state) {
                          << std::endl;
               break;
             }
+            case RPL_REJECTED: {
+              state->log(L"the server rejected the client.");
+              std::wcout << std::format(
+                              L"\033[90m{:^17}\033[0m> \033[31mserver "
+                              L"rejected the client.\033[0m",
+                              L"server"
+                            )
+                         << std::endl;
+              break;
+            }
           }
 
           // set replied flag and notify
